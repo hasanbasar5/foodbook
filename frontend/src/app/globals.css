@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-body: "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-display: "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-body), sans-serif;
+  background: #f1f5f9;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-body), sans-serif;
+  color: #0f172a;
+  background:
+    radial-gradient(circle at top left, rgba(8, 145, 209, 0.13), transparent 26%),
+    linear-gradient(180deg, #f8fbfd 0%, #f1f5f9 100%);
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display), sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.fb-gradient-btn {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0f6b8f 0%, #0891d1 55%, #53d9b3 100%);
+  box-shadow: 0 12px 28px rgba(8, 107, 143, 0.22);
+}
+
+.fb-gradient-btn:hover {
+  filter: brightness(1.03);
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toastGlow {
+  0%,
+  100% {
+    box-shadow: 0 10px 28px rgba(8, 30, 45, 0.1);
+  }
+  50% {
+    box-shadow: 0 14px 36px rgba(8, 30, 45, 0.16);
+  }
+}
+
+img,
+svg,
+canvas,
+video {
+  max-width: 100%;
+}

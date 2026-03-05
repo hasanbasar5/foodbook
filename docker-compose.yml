@@ -1,0 +1,56 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: foodbook-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: foodbook
+      MYSQL_USER: foodbook
+      MYSQL_PASSWORD: foodbook
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  backend:
+    build:
+      context: ./backend
+    container_name: foodbook-backend
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: foodbook
+      DB_PASSWORD: foodbook
+      DB_NAME: foodbook
+      JWT_ACCESS_SECRET: change_me_access
+      JWT_REFRESH_SECRET: change_me_refresh
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL_DAYS: 7
+      LOG_LEVEL: info
+    ports:
+      - "5000:5000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: foodbook-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000/api
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:
