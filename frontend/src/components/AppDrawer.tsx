@@ -87,12 +87,12 @@ export function AppDrawer({
             </Link>
           ) : null}
         </div>
-        <div className="mt-auto rounded-[24px] bg-slate-50 p-4">
-          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Version</p>
-          <p className="mt-2 text-lg font-semibold text-slate-900">Food Book v1.0</p>
+        <div className="mt-auto rounded-[16px] bg-slate-50 p-4">
+          <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400">Version</p>
+          <p className="mt-2 text-sm font-semibold text-slate-900">Food Book v1.0</p>
           
         </div>
-        <p className="mt-3 px-1 text-center text-[11px] tracking-[0.14em] text-slate-400">by ------ Mr.Sketch ------</p>
+        <p className="mt-3 px-1 text-center text-[8px] tracking-[0.14em] text-slate-400 ">Mr.Sketch</p>
       </aside>
     </div>
   );
