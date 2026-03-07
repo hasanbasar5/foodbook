@@ -1,9 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { Plus } from "lucide-react";
+import { Plus, UserCircle2 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { BottomNav } from "@/components/BottomNav";
+import { useAuth } from "@/context/AuthContext";
 
 export function MobileShell({
   children,
@@ -18,6 +19,8 @@ export function MobileShell({
   showFab?: boolean;
   onOpenDrawer?: () => void;
 }) {
+  const { user } = useAuth();
+
   return (
     <div className="min-h-screen bg-slate-100">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-slate-100">
@@ -52,8 +55,18 @@ export function MobileShell({
               aria-label="Open menu"
               data-tour="profile-trigger"
             >
-              <span className="inline-flex rounded-xl border border-white/15 bg-white/10 p-1">
-                <BrandLogo tone="light" compact iconOnly />
+              <span className="inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-white/10 p-1">
+                {user?.avatarUrl ? (
+                  <Image
+                    src={user.avatarUrl}
+                    alt={user.fullName || user.email}
+                    width={48}
+                    height={48}
+                    className="h-12 w-12 rounded-lg object-cover"
+                  />
+                ) : (
+                  <UserCircle2 className="h-9 w-9 text-white" />
+                )}
               </span>
             </button>
           </div>
