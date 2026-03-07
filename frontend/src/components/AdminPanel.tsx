@@ -20,7 +20,7 @@ export function AdminPanel({
   createUserOpen: boolean;
   onToggleCreateUser: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading, accessToken } = useAuth();
   const { showToast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -75,8 +75,12 @@ export function AdminPanel({
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (authLoading || !user || !accessToken) {
+      return;
+    }
+
+    void loadData();
+  }, [accessToken, authLoading, user]);
 
   const assignRole = async (userId: number, nextRole: Role) => {
     await api.put("/admin/assign-role", { userId, role: nextRole });
@@ -259,9 +263,9 @@ export function AdminPanel({
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-900">Organization members</p>
-            <p className="text-xs text-slate-500">
+            {/* <p className="text-xs text-slate-500">
               ADMIN can inspect members. SUPER_ADMIN can create, edit, reset, deactivate, and assign roles.
-            </p>
+            </p> */}
           </div>
           {role === "SUPER_ADMIN" ? (
             <button

@@ -2,7 +2,13 @@ const bcrypt = require("bcryptjs");
 const asyncHandler = require("../middleware/asyncHandler");
 const { findRoleByName } = require("../models/roleModel");
 const { createOrganization } = require("../models/organizationModel");
-const { findByEmail, createUser, findById, updateProfile } = require("../models/userModel");
+const {
+  findByEmail,
+  createUser,
+  findById,
+  updateProfile,
+  updateCurrentUserPassword,
+} = require("../models/userModel");
 const {
   createRefreshToken,
   findRefreshToken,
@@ -22,7 +28,7 @@ const cookieOptions = {
 };
 
 const getRefreshExpiry = () => {
-  const days = Number(process.env.REFRESH_TOKEN_TTL_DAYS || 7);
+  const days = Number(process.env.REFRESH_TOKEN_TTL_DAYS || 30);
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + days);
   return expiresAt;
@@ -139,6 +145,44 @@ const updateCurrentUserProfile = asyncHandler(async (req, res) => {
   });
 });
 
+const changeCurrentUserPassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const user = await findById(req.user.id);
+
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!isValidPassword) {
+    const error = new Error("Current password is incorrect");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    const error = new Error("New password must be different from the current password");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await updateCurrentUserPassword({
+    userId: req.user.id,
+    passwordHash,
+  });
+
+  await deleteUserRefreshTokens(user.id);
+  res.clearCookie("refreshToken", cookieOptions);
+
+  res.json({
+    message: "Password updated successfully. Please sign in again.",
+  });
+});
+
 const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await findByEmail(email);
@@ -215,4 +259,5 @@ module.exports = {
   logout,
   getCurrentUser,
   updateCurrentUserProfile,
+  changeCurrentUserPassword,
 };

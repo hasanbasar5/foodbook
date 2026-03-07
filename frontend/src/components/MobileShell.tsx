@@ -35,6 +35,7 @@ export function MobileShell({
             alt=""
             width={140}
             height={140}
+            priority
             className="pointer-events-none absolute right-0 top-0 opacity-30"
           />
           <div className="relative flex items-center justify-between gap-3">

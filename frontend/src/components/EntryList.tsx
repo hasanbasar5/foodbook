@@ -25,6 +25,8 @@ export function EntryList({
   role,
   onEdit,
   onDelete,
+  showActions = true,
+  className = "mt-4 space-y-3",
 }: {
   entries: Entry[];
   totalBalance: number;
@@ -32,6 +34,8 @@ export function EntryList({
   role: Role;
   onEdit: (entry: Entry) => void;
   onDelete: (entry: Entry) => void;
+  showActions?: boolean;
+  className?: string;
 }) {
   const [pendingDelete, setPendingDelete] = useState<Entry | null>(null);
   const rowBalances = entries.reduce<number[]>((accumulator, entry, index) => {
@@ -52,11 +56,12 @@ export function EntryList({
   }, []);
 
   return (
-    <div className="mt-4 space-y-3" data-tour="entries">
+    <div className={className} data-tour="entries">
       {entries.map((entry, index) => {
-        const canEdit = role === "ADMIN" || role === "SUPER_ADMIN";
-        const canDelete = role === "ADMIN" || role === "SUPER_ADMIN";
-        const entryOwner = entry.user_id === currentUserId ? "You" : entry.email || "User";
+        const canEdit = showActions && (role === "ADMIN" || role === "SUPER_ADMIN");
+        const canDelete = showActions && (role === "ADMIN" || role === "SUPER_ADMIN");
+        const entryOwner =
+          entry.user_id === currentUserId ? "You" : entry.full_name || "User";
         const typeLabel = entry.entry_type === "Credit" ? "Cash In" : "Cash Out";
         const entryTime = new Date(entry.created_at).toLocaleTimeString([], {
           hour: "2-digit",

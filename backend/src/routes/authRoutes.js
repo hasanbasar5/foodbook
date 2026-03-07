@@ -7,6 +7,7 @@ const {
   logout,
   getCurrentUser,
   updateCurrentUserProfile,
+  changeCurrentUserPassword,
 } = require("../controllers/authController");
 const validateRequest = require("../middleware/validateRequest");
 const { loginLimiter } = require("../middleware/rateLimiters");
@@ -75,6 +76,21 @@ router.put(
   ],
   validateRequest,
   updateCurrentUserProfile
+);
+router.put(
+  "/password",
+  authenticate,
+  [
+    body("currentPassword").notEmpty().withMessage("Current password is required"),
+    body("newPassword")
+      .isLength({ min: 8 })
+      .withMessage("New password must be at least 8 characters"),
+    body("confirmPassword")
+      .custom((value, { req }) => value === req.body.newPassword)
+      .withMessage("Password confirmation does not match"),
+  ],
+  validateRequest,
+  changeCurrentUserPassword
 );
 
 module.exports = router;

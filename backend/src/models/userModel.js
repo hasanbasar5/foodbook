@@ -135,6 +135,11 @@ const updateProfile = async ({ userId, fullName, avatarUrl }) => {
   return findById(userId);
 };
 
+const updateCurrentUserPassword = async ({ userId, passwordHash }) => {
+  await pool.query("UPDATE users SET password = ? WHERE id = ?", [passwordHash, userId]);
+  return findById(userId);
+};
+
 const updateManagedUser = ({
   organizationId,
   userId,
@@ -190,6 +195,7 @@ module.exports = {
   listUsers,
   updateUserRole,
   updateProfile,
+  updateCurrentUserPassword,
   updateManagedUser,
   deleteUser,
   setUserStatus,

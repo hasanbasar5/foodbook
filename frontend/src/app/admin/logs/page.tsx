@@ -14,7 +14,7 @@ import { api } from "@/lib/api";
 import { AuditLogItem } from "@/types";
 
 export default function AdminLogsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, accessToken } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
@@ -23,12 +23,16 @@ export default function AdminLogsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (authLoading || !user || !accessToken) {
+      return;
+    }
+
     api
       .get<{ items: AuditLogItem[] }>("/admin/audit-logs", { params: { limit: 30 } })
       .then(({ data }) => setItems(data.items))
       .catch(() => setError("We could not load organization logs right now."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [accessToken, authLoading, user]);
 
   if (!user) {
     return null;

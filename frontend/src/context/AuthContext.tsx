@@ -22,6 +22,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   hasRole: (roles: Role[]) => boolean;
   updateProfile: (fullName: string, avatarUrl?: string | null) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
 }
 
@@ -231,6 +232,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           accessToken: accessToken || "",
           user: data,
         });
+      },
+      changePassword: async (currentPassword, newPassword, confirmPassword) => {
+        await api.put("/auth/password", {
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        });
+        persistSession(null);
+        queuePendingToast({
+          tone: "success",
+          title: "Password updated",
+          description: "Sign in again with your new password.",
+        });
+        if (typeof window !== "undefined") {
+          window.location.href = "/login";
+          return;
+        }
+        router.push("/login");
       },
       refreshCurrentUser,
     }),

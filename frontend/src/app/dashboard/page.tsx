@@ -6,6 +6,7 @@ import Link from "next/link";
 import { DashboardGuide } from "@/components/DashboardGuide";
 import { AppContentSkeleton } from "@/components/AppContentSkeleton";
 import { AppDrawer } from "@/components/AppDrawer";
+import { EntryList } from "@/components/EntryList";
 import { EntryModal } from "@/components/EntryModal";
 import { InlineErrorState } from "@/components/InlineErrorState";
 import { MobileShell } from "@/components/MobileShell";
@@ -28,7 +29,7 @@ const wait = (duration: number) =>
   });
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, accessToken } = useAuth();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -47,23 +48,12 @@ export default function DashboardPage() {
     setError("");
 
     try {
-      let response: { data: EntryResponse };
-
-      try {
-        response = await api.get<EntryResponse>("/cashbook/entries", {
-          params: {
-            page: 1,
-            limit: 5,
-          },
-        });
-      } catch {
-        response = await api.get<EntryResponse>("/cashbook/entries", {
-          params: {
-            page: 1,
-            limit: 5,
-          },
-        });
-      }
+      const response = await api.get<EntryResponse>("/cashbook/entries", {
+        params: {
+          page: 1,
+          limit: 5,
+        },
+      });
 
       const elapsed = Date.now() - startedAt;
       if (elapsed < MIN_SKELETON_MS) {
@@ -80,8 +70,12 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    fetchDashboard();
-  }, []);
+    if (authLoading || !user || !accessToken) {
+      return;
+    }
+
+    void fetchDashboard();
+  }, [accessToken, authLoading, user]);
 
   useEffect(() => {
     if (!user || loading || error) {
@@ -196,49 +190,16 @@ export default function DashboardPage() {
 
                 <div className="space-y-3">
                   {recentEntries.length ? (
-                    recentEntries.map((entry) => (
-                      <div key={entry.id} className="rounded-2xl border border-slate-100 px-4 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{entry.entry_name}</p>
-                            <p className="mt-1 text-xs font-medium uppercase tracking-[0.2em] text-slate-400">
-                              {entry.category} | {entry.payment_method}
-                            </p>
-                            <p className="mt-2 text-xs text-slate-500">
-                              {new Date(entry.created_at).toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}{" "}
-                              | by {entry.user_id === user.id ? "You" : entry.email || "User"}
-                            </p>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                                entry.entry_type === "Credit"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-rose-50 text-rose-700"
-                              }`}
-                            >
-                              {entry.entry_type === "Credit" ? "Cash In" : "Cash Out"}
-                            </span>
-                            <p
-                              className={`text-sm font-semibold ${
-                                entry.entry_type === "Credit" ? "text-emerald-700" : "text-rose-700"
-                              }`}
-                            >
-                              {entry.entry_type === "Credit" ? "" : ""}
-                              {Intl.NumberFormat("en-IN", {
-                                style: "currency",
-                                currency: "INR",
-                                maximumFractionDigits: 2,
-                              }).format(Number(entry.amount))}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="mt-3 text-sm leading-6 text-slate-600">{entry.description}</p>
-                      </div>
-                    ))
+                    <EntryList
+                      entries={recentEntries}
+                      totalBalance={summary.balance}
+                      currentUserId={user.id}
+                      role={user.role}
+                      onEdit={() => {}}
+                      onDelete={() => {}}
+                      showActions={false}
+                      className="space-y-3"
+                    />
                   ) : (
                     <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
                       No entries yet. Tap the add button to create your first cash in or cash out record.

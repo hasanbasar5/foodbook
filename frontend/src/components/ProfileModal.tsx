@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
-import { Upload, X } from "lucide-react";
+import { isAxiosError } from "axios";
+import { KeyRound, Upload, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 
@@ -13,16 +14,25 @@ export function ProfileModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
   const { showToast } = useToast();
   const [fullName, setFullName] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     if (user && open) {
       setFullName(user.fullName || "");
       setAvatarUrl(user.avatarUrl || null);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError("");
     }
   }, [open, user]);
 
@@ -42,15 +52,45 @@ export function ProfileModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitting(true);
-    await updateProfile(fullName, avatarUrl);
-    setSubmitting(false);
-    showToast({
-      tone: "success",
-      title: "Profile updated",
-      description: "Your profile changes were saved successfully.",
-    });
-    onClose();
+    setProfileSubmitting(true);
+
+    try {
+      await updateProfile(fullName, avatarUrl);
+      showToast({
+        tone: "success",
+        title: "Profile updated",
+        description: "Your profile changes were saved successfully.",
+      });
+      onClose();
+    } finally {
+      setProfileSubmitting(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPasswordError("");
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New password and confirmation must match.");
+      return;
+    }
+
+    setPasswordSubmitting(true);
+
+    try {
+      await changePassword(currentPassword, newPassword, confirmPassword);
+      onClose();
+    } catch (error) {
+      setPasswordError(
+        isAxiosError(error)
+          ? error.response?.data?.message || "Unable to change password right now."
+          : error instanceof Error
+            ? error.message
+            : "Unable to change password right now."
+      );
+      setPasswordSubmitting(false);
+    }
   };
 
   return (
@@ -95,8 +135,62 @@ export function ProfileModal({
             value={user.email}
             className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 outline-none"
           />
-          <button type="submit" disabled={submitting} className="fb-gradient-btn w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-70">
-            {submitting ? "Saving..." : "Save profile"}
+          <button type="submit" disabled={profileSubmitting} className="fb-gradient-btn w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-70">
+            {profileSubmitting ? "Saving..." : "Save profile"}
+          </button>
+        </form>
+        <div className="my-5 border-t border-dashed border-slate-200" />
+        <form className="space-y-4" onSubmit={handlePasswordSubmit}>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-2xl bg-white p-2 text-brand-700 shadow-soft">
+                <KeyRound className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Change password</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Update your password here. You will be asked to sign in again after saving.
+                </p>
+              </div>
+            </div>
+          </div>
+          <input
+            type="password"
+            required
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+            placeholder="Current password"
+          />
+          <input
+            type="password"
+            required
+            minLength={8}
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+            placeholder="New password"
+          />
+          <input
+            type="password"
+            required
+            minLength={8}
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+            placeholder="Confirm new password"
+          />
+          {passwordError ? (
+            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-600">
+              {passwordError}
+            </div>
+          ) : null}
+          <button
+            type="submit"
+            disabled={passwordSubmitting}
+            className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-70"
+          >
+            {passwordSubmitting ? "Updating password..." : "Change password"}
           </button>
         </form>
       </div>

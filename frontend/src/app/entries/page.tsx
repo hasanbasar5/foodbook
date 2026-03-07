@@ -16,6 +16,7 @@ import { TermsModal } from "@/components/TermsModal";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { api } from "@/lib/api";
+
 import { exportEntriesToExcel, exportEntriesToPdf } from "@/lib/export";
 import { Entry, EntryResponse } from "@/types";
 
@@ -29,7 +30,7 @@ const wait = (duration: number) =>
   });
 
 export default function EntriesPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading, accessToken } = useAuth();
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -94,27 +95,14 @@ export default function EntriesPage() {
     setError("");
 
     try {
-      let response: { data: EntryResponse };
-
-      try {
-        response = await api.get<EntryResponse>("/cashbook/entries", {
-          params: {
-            page: nextPage,
-            limit: 10,
-            ...(fromDate ? { fromDate } : {}),
-            ...(toDate ? { toDate } : {}),
-          },
-        });
-      } catch {
-        response = await api.get<EntryResponse>("/cashbook/entries", {
-          params: {
-            page: nextPage,
-            limit: 10,
-            ...(fromDate ? { fromDate } : {}),
-            ...(toDate ? { toDate } : {}),
-          },
-        });
-      }
+      const response = await api.get<EntryResponse>("/cashbook/entries", {
+        params: {
+          page: nextPage,
+          limit: 10,
+          ...(fromDate ? { fromDate } : {}),
+          ...(toDate ? { toDate } : {}),
+        },
+      });
 
       if (!append) {
         const elapsed = Date.now() - startedAt;
@@ -135,9 +123,13 @@ export default function EntriesPage() {
   };
 
   useEffect(() => {
+    if (authLoading || !user || !accessToken) {
+      return;
+    }
+
     setPage(1);
-    fetchEntries(1, false);
-  }, [fromDate, toDate]);
+    void fetchEntries(1, false);
+  }, [accessToken, authLoading, fromDate, toDate, user]);
 
   const submitEntry = async (payload: {
     entryName: string;
