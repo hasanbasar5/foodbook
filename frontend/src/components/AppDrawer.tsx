@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { FileText, ScrollText, ShieldCheck, UserCircle2, X } from "lucide-react";
+import { ChartNoAxesColumn, FileText, ScrollText, ShieldCheck, UserCircle2, X } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/context/AuthContext";
 
@@ -84,6 +84,16 @@ export function AppDrawer({
             >
               <ScrollText className="h-5 w-5 text-brand-700" />
               Logs
+            </Link>
+          ) : null}
+          {user.isOwner ? (
+            <Link
+              href="/owner"
+              onClick={onClose}
+              className="flex w-full items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-left text-sm font-medium text-slate-700"
+            >
+              <ChartNoAxesColumn className="h-5 w-5 text-brand-700" />
+              Owner dashboard
             </Link>
           ) : null}
         </div>

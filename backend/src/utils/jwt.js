@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { isOwnerUser } = require("./owner");
 
 const getAccessPayload = (user) => ({
   id: user.id,
@@ -6,6 +7,7 @@ const getAccessPayload = (user) => ({
   role: user.role,
   organizationId: user.organizationId,
   organizationName: user.organizationName,
+  isOwner: isOwnerUser(user),
 });
 
 const signAccessToken = (user) =>

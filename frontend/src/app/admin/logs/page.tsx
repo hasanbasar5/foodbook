@@ -9,12 +9,14 @@ import { MobileShell } from "@/components/MobileShell";
 import { ProfileModal } from "@/components/ProfileModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { TermsModal } from "@/components/TermsModal";
+import { useToast } from "@/context/ToastContext";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { AuditLogItem } from "@/types";
 
 export default function AdminLogsPage() {
   const { user, loading: authLoading, accessToken } = useAuth();
+  const { showToast } = useToast();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
@@ -22,17 +24,47 @@ export default function AdminLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const loadLogs = async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const { data } = await api.get<{ items: AuditLogItem[] }>("/admin/audit-logs", {
+        params: { limit: 30 },
+      });
+      setItems(data.items);
+    } catch {
+      setError("We could not load organization logs right now.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (authLoading || !user || !accessToken) {
       return;
     }
 
-    api
-      .get<{ items: AuditLogItem[] }>("/admin/audit-logs", { params: { limit: 30 } })
-      .then(({ data }) => setItems(data.items))
-      .catch(() => setError("We could not load organization logs right now."))
-      .finally(() => setLoading(false));
+    void loadLogs();
   }, [accessToken, authLoading, user]);
+
+  const restoreDeletedEntry = async (entryId: number) => {
+    try {
+      await api.patch(`/cashbook/entry/${entryId}/restore`);
+      showToast({
+        tone: "success",
+        title: "Entry restored",
+        description: "The deleted entry is back in the cashbook.",
+      });
+      await loadLogs();
+    } catch {
+      showToast({
+        tone: "error",
+        title: "Restore failed",
+        description: "We could not restore that entry right now.",
+      });
+    }
+  };
 
   if (!user) {
     return null;
@@ -59,6 +91,8 @@ export default function AdminLogsPage() {
             items={items}
             title="Logs"
             subtitle="Super admin can inspect who updated profiles, managed users, reset passwords, and edited entries."
+            canRestoreEntries
+            onRestoreEntry={restoreDeletedEntry}
           />
         )}
         <AppDrawer

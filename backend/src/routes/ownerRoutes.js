@@ -1,28 +1,30 @@
 const express = require("express");
 const { body, query } = require("express-validator");
 const authenticate = require("../middleware/authenticate");
-const authorize = require("../middleware/authorize");
+const authorizeOwner = require("../middleware/authorizeOwner");
 const validateRequest = require("../middleware/validateRequest");
 const {
-  getUsers,
-  assignRole,
-  getReports,
-  createManagedUser,
-  updateManagedUserById,
-  deleteManagedUserById,
-  toggleManagedUserStatus,
-  resetManagedUserPassword,
-  getAuditActivity,
-  getDeletedEntries,
-} = require("../controllers/adminController");
+  getOwnerDashboard,
+  getOwnerUsers,
+  getOwnerReports,
+  createOwnerManagedUser,
+  assignOwnerRole,
+  updateOwnerManagedUserById,
+  deleteOwnerManagedUserById,
+  toggleOwnerUserStatus,
+  resetOwnerManagedUserPassword,
+  getOwnerDeletedEntries,
+} = require("../controllers/ownerController");
 
 const router = express.Router();
 
 router.use(authenticate);
+router.use(authorizeOwner);
+
+router.get("/dashboard", getOwnerDashboard);
 
 router.get(
   "/users",
-  authorize(["ADMIN", "SUPER_ADMIN"]),
   [
     query("page").optional().isInt({ min: 1 }),
     query("limit").optional().isInt({ min: 1, max: 50 }),
@@ -30,12 +32,25 @@ router.get(
     query("status").optional().isIn(["all", "active", "inactive"]),
   ],
   validateRequest,
-  getUsers
+  getOwnerUsers
+);
+
+router.get(
+  "/reports",
+  [query("userId").optional().isInt({ min: 1 })],
+  validateRequest,
+  getOwnerReports
+);
+
+router.get(
+  "/deleted-entries",
+  [query("limit").optional().isInt({ min: 1, max: 50 })],
+  validateRequest,
+  getOwnerDeletedEntries
 );
 
 router.put(
   "/assign-role",
-  authorize(["SUPER_ADMIN"]),
   [
     body("userId").isInt({ min: 1 }).withMessage("Valid user id is required"),
     body("role")
@@ -43,35 +58,11 @@ router.put(
       .withMessage("Valid role is required"),
   ],
   validateRequest,
-  assignRole
-);
-
-router.get(
-  "/reports",
-  authorize(["ADMIN", "SUPER_ADMIN"]),
-  [query("userId").optional().isInt({ min: 1 })],
-  validateRequest,
-  getReports
-);
-
-router.get(
-  "/audit-logs",
-  authorize(["SUPER_ADMIN"]),
-  [query("limit").optional().isInt({ min: 1, max: 50 })],
-  validateRequest,
-  getAuditActivity
-);
-router.get(
-  "/deleted-entries",
-  authorize(["SUPER_ADMIN"]),
-  [query("limit").optional().isInt({ min: 1, max: 50 })],
-  validateRequest,
-  getDeletedEntries
+  assignOwnerRole
 );
 
 router.post(
   "/users",
-  authorize(["SUPER_ADMIN"]),
   [
     body("email").isEmail().withMessage("Valid email is required"),
     body("fullName")
@@ -84,6 +75,7 @@ router.post(
     body("role")
       .isIn(["USER", "ADMIN", "SUPER_ADMIN"])
       .withMessage("Valid role is required"),
+    body("organizationId").optional({ nullable: true }).isInt({ min: 1 }),
     body("avatarUrl")
       .optional({ nullable: true })
       .isString()
@@ -92,12 +84,11 @@ router.post(
     body("isActive").optional().isBoolean().withMessage("Status must be true or false"),
   ],
   validateRequest,
-  createManagedUser
+  createOwnerManagedUser
 );
 
 router.put(
   "/users/:id",
-  authorize(["SUPER_ADMIN"]),
   [
     body("fullName")
       .trim()
@@ -118,26 +109,20 @@ router.put(
     body("isActive").optional().isBoolean().withMessage("Status must be true or false"),
   ],
   validateRequest,
-  updateManagedUserById
+  updateOwnerManagedUserById
 );
 
-router.delete(
-  "/users/:id",
-  authorize(["SUPER_ADMIN"]),
-  deleteManagedUserById
-);
+router.delete("/users/:id", deleteOwnerManagedUserById);
 
 router.patch(
   "/users/:id/status",
-  authorize(["SUPER_ADMIN"]),
   [body("isActive").isBoolean().withMessage("Status must be true or false")],
   validateRequest,
-  toggleManagedUserStatus
+  toggleOwnerUserStatus
 );
 
 router.post(
   "/users/:id/reset-password",
-  authorize(["SUPER_ADMIN"]),
   [
     body("password")
       .optional({ nullable: true })
@@ -145,7 +130,7 @@ router.post(
       .withMessage("Password must be at least 8 characters"),
   ],
   validateRequest,
-  resetManagedUserPassword
+  resetOwnerManagedUserPassword
 );
 
 module.exports = router;

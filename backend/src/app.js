@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const authRoutes = require("./routes/authRoutes");
 const cashbookRoutes = require("./routes/cashbookRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const ownerRoutes = require("./routes/ownerRoutes");
 const { notFoundHandler, errorHandler } = require("./middleware/errorHandler");
 const { requestLogger } = require("./config/logger");
 
@@ -30,6 +31,7 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/cashbook", cashbookRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/owner", ownerRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

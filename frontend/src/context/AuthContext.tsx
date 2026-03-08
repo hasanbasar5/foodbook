@@ -12,6 +12,7 @@ interface AuthContextValue {
   accessToken: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  ownerLogin: (email: string, password: string) => Promise<void>;
   register: (input: {
     email: string;
     password: string;
@@ -35,18 +36,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const refreshPromise = useRef<Promise<string | null> | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
+
+  const navigateToHome = (nextUser: AuthUser | null) => {
+    const target = nextUser?.isOwner ? "/owner" : "/dashboard";
+
+    if (typeof window !== "undefined") {
+      window.location.href = target;
+      return;
+    }
+
+    router.push(target);
+  };
 
   const persistSession = (data: AuthResponse | null) => {
     if (!data) {
       localStorage.removeItem(STORAGE_KEY);
       setUser(null);
       setAccessToken(null);
+      accessTokenRef.current = null;
+      delete api.defaults.headers.common.Authorization;
       return;
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setUser(data.user);
     setAccessToken(data.accessToken);
+    accessTokenRef.current = data.accessToken;
+    api.defaults.headers.common.Authorization = `Bearer ${data.accessToken}`;
   };
 
   const refreshSession = async () => {
@@ -101,6 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const parsed = JSON.parse(cached) as AuthResponse;
       setUser(parsed.user);
       setAccessToken(parsed.accessToken);
+      accessTokenRef.current = parsed.accessToken;
+      api.defaults.headers.common.Authorization = `Bearer ${parsed.accessToken}`;
       refreshSession().finally(() => setLoading(false));
     } catch {
       localStorage.removeItem(STORAGE_KEY);
@@ -109,9 +128,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    accessTokenRef.current = accessToken;
+    if (accessToken) {
+      api.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+    } else {
+      delete api.defaults.headers.common.Authorization;
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
     const requestInterceptor = api.interceptors.request.use((config) => {
-      if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+      if (accessTokenRef.current) {
+        config.headers.Authorization = `Bearer ${accessTokenRef.current}`;
       }
       return config;
     });
@@ -150,7 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       api.interceptors.request.eject(requestInterceptor);
       api.interceptors.response.eject(responseInterceptor);
     };
-  }, [accessToken, router]);
+  }, [router]);
 
   const authenticate = async (
     endpoint: "/auth/login" | "/auth/register",
@@ -160,6 +188,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fullName?: string;
       accountType?: "user" | "business";
       organizationName?: string;
+    },
+    options?: {
+      requireOwner?: boolean;
     }
   ) => {
     const { data } = await api.post<AuthResponse>(endpoint, {
@@ -173,6 +204,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         : {}),
     });
+    if (options?.requireOwner && !data.user.isOwner) {
+      persistSession(null);
+      throw new Error("Only owner user id 3 can access the owner dashboard.");
+    }
     persistSession(data);
     queuePendingToast(
       endpoint === "/auth/login"
@@ -187,11 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             description: "Your Food Book account is ready.",
           }
     );
-    if (typeof window !== "undefined") {
-      window.location.href = "/dashboard";
-      return;
-    }
-    router.push("/dashboard");
+    navigateToHome(data.user);
   };
 
   const value = useMemo<AuthContextValue>(
@@ -204,6 +235,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email,
           password,
         }),
+      ownerLogin: (email, password) =>
+        authenticate(
+          "/auth/login",
+          {
+            email,
+            password,
+          },
+          { requireOwner: true }
+        ),
       register: (input) => authenticate("/auth/register", input),
       logout: async () => {
         try {

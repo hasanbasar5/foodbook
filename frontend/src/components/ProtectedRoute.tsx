@@ -9,9 +9,11 @@ import { Role } from "@/types";
 export function ProtectedRoute({
   children,
   roles,
+  requireOwner = false,
 }: {
   children: React.ReactNode;
   roles?: Role[];
+  requireOwner?: boolean;
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -23,6 +25,12 @@ export function ProtectedRoute({
         return;
       }
       router.replace("/login");
+    } else if (!loading && user && requireOwner && !user.isOwner) {
+      if (typeof window !== "undefined") {
+        window.location.href = "/dashboard";
+        return;
+      }
+      router.replace("/dashboard");
     } else if (!loading && user && roles && !roles.includes(user.role)) {
       if (typeof window !== "undefined") {
         window.location.href = "/dashboard";
@@ -30,9 +38,9 @@ export function ProtectedRoute({
       }
       router.replace("/dashboard");
     }
-  }, [loading, roles, router, user]);
+  }, [loading, requireOwner, roles, router, user]);
 
-  if (loading || !user || (roles && !roles.includes(user.role))) {
+  if (loading || !user || (requireOwner && !user.isOwner) || (roles && !roles.includes(user.role))) {
     return (
       <div className="min-h-screen bg-slate-100">
         <div className="mx-auto flex min-h-screen max-w-md flex-col bg-slate-100">

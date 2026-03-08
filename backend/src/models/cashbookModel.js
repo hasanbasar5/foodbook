@@ -1,7 +1,7 @@
 const pool = require("../config/db");
 
 const buildFilters = ({ organizationId, userId, scope, fromDate, toDate, selectedUserId }) => {
-  const clauses = [];
+  const clauses = ["cashbook_entries.deleted_at IS NULL"];
   const values = [];
 
   if (organizationId) {
@@ -67,12 +67,20 @@ const createEntry = async ({
 };
 
 const getEntryById = async (id, organizationId) => {
+  return getEntryByIdWithOptions({ id, organizationId });
+};
+
+const getEntryByIdWithOptions = async ({ id, organizationId, includeDeleted = false }) => {
   const values = [id];
   let where = "cashbook_entries.id = ?";
 
   if (organizationId) {
     where += " AND cashbook_entries.organization_id = ?";
     values.push(organizationId);
+  }
+
+  if (!includeDeleted) {
+    where += " AND cashbook_entries.deleted_at IS NULL";
   }
 
   const [rows] = await pool.query(
@@ -164,8 +172,55 @@ const updateEntry = async ({
   return getEntryById(id);
 };
 
-const deleteEntry = async (id) => {
-  await pool.query("DELETE FROM cashbook_entries WHERE id = ?", [id]);
+const deleteEntry = async ({ id, deletedByUserId }) => {
+  await pool.query(
+    "UPDATE cashbook_entries SET deleted_at = CURRENT_TIMESTAMP, deleted_by_user_id = ? WHERE id = ?",
+    [deletedByUserId, id]
+  );
+};
+
+const restoreEntry = async (id) => {
+  await pool.query(
+    "UPDATE cashbook_entries SET deleted_at = NULL, deleted_by_user_id = NULL WHERE id = ?",
+    [id]
+  );
+  return getEntryById(id);
+};
+
+const listDeletedEntries = async ({ organizationId, limit = 20 }) => {
+  const [rows] = await pool.query(
+    `SELECT cashbook_entries.id, cashbook_entries.user_id, cashbook_entries.entry_name, cashbook_entries.category,
+        cashbook_entries.amount, cashbook_entries.date, cashbook_entries.description, cashbook_entries.entry_type,
+        cashbook_entries.payment_method, cashbook_entries.created_at, cashbook_entries.deleted_at,
+        users.email, users.full_name
+     FROM cashbook_entries
+     INNER JOIN users ON users.id = cashbook_entries.user_id
+     WHERE cashbook_entries.organization_id = ? AND cashbook_entries.deleted_at IS NOT NULL
+     ORDER BY cashbook_entries.deleted_at DESC
+     LIMIT ?`,
+    [organizationId, limit]
+  );
+
+  return rows;
+};
+
+const listDeletedEntriesGlobal = async ({ limit = 20 }) => {
+  const [rows] = await pool.query(
+    `SELECT cashbook_entries.id, cashbook_entries.user_id, cashbook_entries.organization_id,
+        cashbook_entries.entry_name, cashbook_entries.category, cashbook_entries.amount,
+        cashbook_entries.date, cashbook_entries.description, cashbook_entries.entry_type,
+        cashbook_entries.payment_method, cashbook_entries.created_at, cashbook_entries.deleted_at,
+        users.email, users.full_name, organizations.name AS organization_name
+     FROM cashbook_entries
+     INNER JOIN users ON users.id = cashbook_entries.user_id
+     LEFT JOIN organizations ON organizations.id = cashbook_entries.organization_id
+     WHERE cashbook_entries.deleted_at IS NOT NULL
+     ORDER BY cashbook_entries.deleted_at DESC
+     LIMIT ?`,
+    [limit]
+  );
+
+  return rows;
 };
 
 const getAdminSummary = async ({ organizationId, selectedUserId }) => {
@@ -193,7 +248,10 @@ const getAdminSummary = async ({ organizationId, selectedUserId }) => {
         COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Credit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_credit,
         COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Debit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_debit
      FROM users
-     LEFT JOIN cashbook_entries ON cashbook_entries.user_id = users.id AND cashbook_entries.organization_id = users.organization_id
+     LEFT JOIN cashbook_entries
+       ON cashbook_entries.user_id = users.id
+      AND cashbook_entries.organization_id = users.organization_id
+      AND cashbook_entries.deleted_at IS NULL
      WHERE users.organization_id = ?
      GROUP BY users.id, users.email
      ORDER BY users.email ASC`
@@ -214,11 +272,64 @@ const getAdminSummary = async ({ organizationId, selectedUserId }) => {
   };
 };
 
+const getOwnerSummary = async ({ selectedUserId }) => {
+  const filters = ["cashbook_entries.deleted_at IS NULL"];
+  const values = [];
+
+  if (selectedUserId) {
+    filters.push("cashbook_entries.user_id = ?");
+    values.push(selectedUserId);
+  }
+
+  const where = `WHERE ${filters.join(" AND ")}`;
+
+  const [summaryRows] = await pool.query(
+    `SELECT
+        COUNT(*) AS total_entries,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Credit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_credit,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Debit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_debit
+     FROM cashbook_entries
+     ${where}`,
+    values
+  );
+
+  const [userSummaryRows] = await pool.query(
+    `SELECT users.id AS user_id, users.email, organizations.name AS organization_name,
+        COUNT(cashbook_entries.id) AS entry_count,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Credit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_credit,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Debit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_debit
+     FROM users
+     LEFT JOIN organizations ON organizations.id = users.organization_id
+     LEFT JOIN cashbook_entries
+       ON cashbook_entries.user_id = users.id
+      AND cashbook_entries.deleted_at IS NULL
+     GROUP BY users.id, users.email, organizations.name
+     ORDER BY users.email ASC`
+  );
+
+  return {
+    summary: {
+      totalEntries: Number(summaryRows[0].total_entries || 0),
+      totalCredit: Number(summaryRows[0].total_credit || 0),
+      totalDebit: Number(summaryRows[0].total_debit || 0),
+      balance:
+        Number(summaryRows[0].total_credit || 0) -
+        Number(summaryRows[0].total_debit || 0),
+    },
+    users: userSummaryRows,
+  };
+};
+
 module.exports = {
   createEntry,
   getEntryById,
+  getEntryByIdWithOptions,
   listEntries,
   updateEntry,
   deleteEntry,
+  restoreEntry,
+  listDeletedEntries,
+  listDeletedEntriesGlobal,
   getAdminSummary,
+  getOwnerSummary,
 };

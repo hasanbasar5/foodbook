@@ -6,8 +6,14 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
-  const { login, register, user } = useAuth();
+export function AuthForm({
+  mode,
+  ownerOnly = false,
+}: {
+  mode: "login" | "register";
+  ownerOnly?: boolean;
+}) {
+  const { login, ownerLogin, register, user } = useAuth();
   const router = useRouter();
   const [accountType, setAccountType] = useState<"user" | "business">("user");
   const [organizationName, setOrganizationName] = useState("");
@@ -19,7 +25,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
   useEffect(() => {
     if (user) {
-      router.replace("/dashboard");
+      router.replace(user.isOwner ? "/owner" : "/dashboard");
     }
   }, [router, user]);
 
@@ -30,7 +36,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
     try {
       if (mode === "login") {
-        await login(email, password);
+        if (ownerOnly) {
+          await ownerLogin(email, password);
+        } else {
+          await login(email, password);
+        }
       } else {
         await register({
           email,
@@ -43,10 +53,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     } catch (err: unknown) {
       setError(
         isAxiosError(err)
-          ? err.response?.data?.message || "Unable to continue right now."
+          ? err.response?.data?.message || (ownerOnly ? "Unable to access owner login right now." : "Unable to continue right now.")
           : err instanceof Error
             ? err.message
-            : "Unable to continue right now."
+            : ownerOnly
+              ? "Unable to access owner login right now."
+              : "Unable to continue right now."
       );
       setSubmitting(false);
     }
@@ -102,11 +114,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               placeholder={accountType === "business" ? "Business owner name" : "Your name"}
             />
           </label>
-          {accountType === "business" ? (
+          {/* {accountType === "business" ? (
             <div className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
               This option creates a new organization and makes this account the `SUPER_ADMIN`.
             </div>
-          ) : null}
+          ) : null} */}
         </>
       ) : null}
       <label className="block space-y-2">
@@ -144,8 +156,13 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         className="fb-gradient-btn flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition disabled:opacity-70"
       >
         {submitting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-        {mode === "login" ? "Sign in" : "Create account"}
+        {mode === "login" ? (ownerOnly ? "Sign in as owner" : "Sign in") : "Create account"}
       </button>
+      {/* {ownerOnly ? (
+        <div className="rounded-2xl bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          Only the owner account from the users table with `id = 3` can use this page.
+        </div>
+      ) : null} */}
     </form>
   );
 }

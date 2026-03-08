@@ -1,33 +1,33 @@
 const asyncHandler = require("../middleware/asyncHandler");
 const bcrypt = require("bcryptjs");
 const {
-  listUsers,
-  updateUserRole,
+  listAllUsers,
   findById,
   findByEmail,
   createUser,
-  updateManagedUser,
-  deleteUser,
-  setUserStatus,
-  resetUserPassword,
+  updateManagedUserGlobal,
+  deleteUserGlobal,
+  setUserStatusGlobal,
+  resetUserPasswordGlobal,
+  updateUserRoleGlobal,
 } = require("../models/userModel");
 const { findRoleByName } = require("../models/roleModel");
-const { getAdminSummary, listDeletedEntries } = require("../models/cashbookModel");
-const { createAuditLog, listAuditLogs } = require("../models/auditLogModel");
+const { getOwnerLoginStats } = require("../models/loginEventModel");
+const {
+  getOwnerSummary,
+  listDeletedEntriesGlobal,
+} = require("../models/cashbookModel");
+const { createAuditLog } = require("../models/auditLogModel");
 
-const assertSameOrganization = (actor, targetUser) => {
-  if (!targetUser || Number(targetUser.organizationId) !== Number(actor.organizationId)) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
-  }
-};
+const getOwnerDashboard = asyncHandler(async (_req, res) => {
+  const data = await getOwnerLoginStats();
+  res.json(data);
+});
 
-const getUsers = asyncHandler(async (req, res) => {
+const getOwnerUsers = asyncHandler(async (req, res) => {
   const page = Number(req.query.page || 1);
   const limit = Math.min(Number(req.query.limit || 10), 50);
-  const result = await listUsers({
-    organizationId: req.user.organizationId,
+  const result = await listAllUsers({
     page,
     limit,
     search: req.query.search?.trim(),
@@ -36,55 +36,14 @@ const getUsers = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
-const assignRole = asyncHandler(async (req, res) => {
-  const { userId, role } = req.body;
-  const existingUser = await findById(userId);
-  if (!existingUser) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
-  }
-  assertSameOrganization(req.user, existingUser);
-
-  const roleRecord = await findRoleByName(role);
-  if (!roleRecord) {
-    const error = new Error("Role not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  const updatedUser = await updateUserRole({
-    organizationId: req.user.organizationId,
-    userId,
-    roleId: roleRecord.id,
-  });
-  await createAuditLog({
-    organizationId: req.user.organizationId,
-    actorUserId: req.user.id,
-    actorRole: req.user.role,
-    action: "ASSIGN_ROLE",
-    targetType: "USER",
-    targetId: updatedUser.id,
-    details: { role: updatedUser.role, email: updatedUser.email },
-  });
-  res.json({
-    id: updatedUser.id,
-    email: updatedUser.email,
-    role: updatedUser.role,
-  });
-});
-
-const getReports = asyncHandler(async (req, res) => {
+const getOwnerReports = asyncHandler(async (req, res) => {
   const selectedUserId = req.query.userId ? Number(req.query.userId) : undefined;
-  const reports = await getAdminSummary({
-    organizationId: req.user.organizationId,
-    selectedUserId,
-  });
+  const reports = await getOwnerSummary({ selectedUserId });
   res.json(reports);
 });
 
-const createManagedUser = asyncHandler(async (req, res) => {
-  const { email, password, role, fullName, avatarUrl, isActive } = req.body;
+const createOwnerManagedUser = asyncHandler(async (req, res) => {
+  const { email, password, role, fullName, avatarUrl, isActive, organizationId } = req.body;
   const existingUser = await findByEmail(email);
   if (existingUser) {
     const error = new Error("Email is already registered");
@@ -97,11 +56,21 @@ const createManagedUser = asyncHandler(async (req, res) => {
   const user = await createUser({
     email,
     password: passwordHash,
-    organizationId: req.user.organizationId,
+    organizationId: organizationId || null,
     roleId: roleRecord.id,
     fullName,
     avatarUrl,
     isActive,
+  });
+
+  await createAuditLog({
+    organizationId: user.organizationId,
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: "OWNER_CREATE_USER",
+    targetType: "USER",
+    targetId: user.id,
+    details: { email: user.email, role: user.role },
   });
 
   res.status(201).json({
@@ -111,19 +80,50 @@ const createManagedUser = asyncHandler(async (req, res) => {
     avatarUrl: user.avatarUrl,
     isActive: user.isActive,
     role: user.role,
-  });
-  await createAuditLog({
-    organizationId: req.user.organizationId,
-    actorUserId: req.user.id,
-    actorRole: req.user.role,
-    action: "CREATE_MANAGED_USER",
-    targetType: "USER",
-    targetId: user.id,
-    details: { email: user.email, role: user.role },
+    organizationId: user.organizationId,
+    organizationName: user.organizationName,
   });
 });
 
-const updateManagedUserById = asyncHandler(async (req, res) => {
+const assignOwnerRole = asyncHandler(async (req, res) => {
+  const { userId, role } = req.body;
+  const existingUser = await findById(userId);
+  if (!existingUser) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const roleRecord = await findRoleByName(role);
+  if (!roleRecord) {
+    const error = new Error("Role not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const updatedUser = await updateUserRoleGlobal({
+    userId,
+    roleId: roleRecord.id,
+  });
+
+  await createAuditLog({
+    organizationId: updatedUser.organizationId,
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: "OWNER_ASSIGN_ROLE",
+    targetType: "USER",
+    targetId: updatedUser.id,
+    details: { role: updatedUser.role, email: updatedUser.email },
+  });
+
+  res.json({
+    id: updatedUser.id,
+    email: updatedUser.email,
+    role: updatedUser.role,
+  });
+});
+
+const updateOwnerManagedUserById = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   const { fullName, avatarUrl, role, password, isActive } = req.body;
   const existingUser = await findById(userId);
@@ -132,18 +132,26 @@ const updateManagedUserById = asyncHandler(async (req, res) => {
     error.statusCode = 404;
     throw error;
   }
-  assertSameOrganization(req.user, existingUser);
 
   const roleRecord = await findRoleByName(role);
   const passwordHash = password ? await bcrypt.hash(password, 12) : null;
-  const user = await updateManagedUser({
-    organizationId: req.user.organizationId,
+  const user = await updateManagedUserGlobal({
     userId,
     fullName,
     avatarUrl,
     roleId: roleRecord.id,
     password: passwordHash,
     isActive,
+  });
+
+  await createAuditLog({
+    organizationId: user.organizationId,
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: "OWNER_UPDATE_USER",
+    targetType: "USER",
+    targetId: user.id,
+    details: { email: user.email, role: user.role, isActive: user.isActive },
   });
 
   res.json({
@@ -154,18 +162,9 @@ const updateManagedUserById = asyncHandler(async (req, res) => {
     isActive: user.isActive,
     role: user.role,
   });
-  await createAuditLog({
-    organizationId: req.user.organizationId,
-    actorUserId: req.user.id,
-    actorRole: req.user.role,
-    action: "UPDATE_MANAGED_USER",
-    targetType: "USER",
-    targetId: user.id,
-    details: { email: user.email, role: user.role, isActive: user.isActive },
-  });
 });
 
-const deleteManagedUserById = asyncHandler(async (req, res) => {
+const deleteOwnerManagedUserById = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   if (req.user.id === userId) {
     const error = new Error("You cannot delete your own account");
@@ -179,14 +178,13 @@ const deleteManagedUserById = asyncHandler(async (req, res) => {
     error.statusCode = 404;
     throw error;
   }
-  assertSameOrganization(req.user, existingUser);
 
-  await deleteUser({ organizationId: req.user.organizationId, userId });
+  await deleteUserGlobal({ userId });
   await createAuditLog({
-    organizationId: req.user.organizationId,
+    organizationId: existingUser.organizationId,
     actorUserId: req.user.id,
     actorRole: req.user.role,
-    action: "DELETE_MANAGED_USER",
+    action: "OWNER_DELETE_USER",
     targetType: "USER",
     targetId: userId,
     details: { email: existingUser.email },
@@ -194,7 +192,7 @@ const deleteManagedUserById = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-const toggleManagedUserStatus = asyncHandler(async (req, res) => {
+const toggleOwnerUserStatus = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   const { isActive } = req.body;
   if (req.user.id === userId && !isActive) {
@@ -209,18 +207,13 @@ const toggleManagedUserStatus = asyncHandler(async (req, res) => {
     error.statusCode = 404;
     throw error;
   }
-  assertSameOrganization(req.user, existingUser);
 
-  const user = await setUserStatus({
-    organizationId: req.user.organizationId,
-    userId,
-    isActive,
-  });
+  const user = await setUserStatusGlobal({ userId, isActive });
   await createAuditLog({
-    organizationId: req.user.organizationId,
+    organizationId: user.organizationId,
     actorUserId: req.user.id,
     actorRole: req.user.role,
-    action: isActive ? "ACTIVATE_USER" : "DEACTIVATE_USER",
+    action: isActive ? "OWNER_ACTIVATE_USER" : "OWNER_DEACTIVATE_USER",
     targetType: "USER",
     targetId: user.id,
     details: { email: user.email },
@@ -234,7 +227,7 @@ const toggleManagedUserStatus = asyncHandler(async (req, res) => {
   });
 });
 
-const resetManagedUserPassword = asyncHandler(async (req, res) => {
+const resetOwnerManagedUserPassword = asyncHandler(async (req, res) => {
   const userId = Number(req.params.id);
   const manualPassword = typeof req.body.password === "string" ? req.body.password.trim() : "";
   const existingUser = await findById(userId);
@@ -243,7 +236,6 @@ const resetManagedUserPassword = asyncHandler(async (req, res) => {
     error.statusCode = 404;
     throw error;
   }
-  assertSameOrganization(req.user, existingUser);
 
   const requiresManualPassword = existingUser.role === "ADMIN" || existingUser.role === "SUPER_ADMIN";
   if (requiresManualPassword && !manualPassword) {
@@ -254,16 +246,15 @@ const resetManagedUserPassword = asyncHandler(async (req, res) => {
 
   const nextPassword = manualPassword || `Fb@${Math.random().toString(36).slice(-10)}`;
   const passwordHash = await bcrypt.hash(nextPassword, 12);
-  await resetUserPassword({
-    organizationId: req.user.organizationId,
+  await resetUserPasswordGlobal({
     userId,
     passwordHash,
   });
   await createAuditLog({
-    organizationId: req.user.organizationId,
+    organizationId: existingUser.organizationId,
     actorUserId: req.user.id,
     actorRole: req.user.role,
-    action: "RESET_USER_PASSWORD",
+    action: "OWNER_RESET_USER_PASSWORD",
     targetType: "USER",
     targetId: userId,
     details: { email: existingUser.email },
@@ -276,35 +267,21 @@ const resetManagedUserPassword = asyncHandler(async (req, res) => {
   });
 });
 
-const getAuditActivity = asyncHandler(async (req, res) => {
+const getOwnerDeletedEntries = asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit || 20), 50);
-  const items = await listAuditLogs({
-    organizationId: req.user.organizationId,
-    limit,
-  });
-
-  res.json({ items });
-});
-
-const getDeletedEntries = asyncHandler(async (req, res) => {
-  const limit = Math.min(Number(req.query.limit || 20), 50);
-  const items = await listDeletedEntries({
-    organizationId: req.user.organizationId,
-    limit,
-  });
-
+  const items = await listDeletedEntriesGlobal({ limit });
   res.json({ items });
 });
 
 module.exports = {
-  getUsers,
-  assignRole,
-  getReports,
-  createManagedUser,
-  updateManagedUserById,
-  deleteManagedUserById,
-  toggleManagedUserStatus,
-  resetManagedUserPassword,
-  getAuditActivity,
-  getDeletedEntries,
+  getOwnerDashboard,
+  getOwnerUsers,
+  getOwnerReports,
+  createOwnerManagedUser,
+  assignOwnerRole,
+  updateOwnerManagedUserById,
+  deleteOwnerManagedUserById,
+  toggleOwnerUserStatus,
+  resetOwnerManagedUserPassword,
+  getOwnerDeletedEntries,
 };

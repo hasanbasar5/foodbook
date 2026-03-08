@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { isAxiosError } from "axios";
 import { Copy, X } from "lucide-react";
 import { useToast } from "@/context/ToastContext";
 import { api } from "@/lib/api";
@@ -11,11 +12,15 @@ export function CreateUserModal({
   onClose,
   onCreated,
   editingUser,
+  endpointPrefix = "/admin",
+  modalLabel = "Super Admin",
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => Promise<void>;
   editingUser?: UserRow | null;
+  endpointPrefix?: string;
+  modalLabel?: string;
 }) {
   const { showToast } = useToast();
   const [form, setForm] = useState({
@@ -27,6 +32,7 @@ export function CreateUserModal({
   });
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const canAutoGeneratePassword = form.role === "USER";
 
   useEffect(() => {
     if (editingUser) {
@@ -70,32 +76,45 @@ export function CreateUserModal({
       role: form.role,
       isActive: form.isActive,
     };
-    if (editingUser) {
-      await api.put(`/admin/users/${editingUser.id}`, {
-        fullName: payload.fullName,
-        password: payload.password || undefined,
-        role: payload.role,
-        isActive: payload.isActive,
-      });
-      setMessage("User updated successfully.");
-      showToast({
-        tone: "success",
-        title: "Member updated",
-        description: `${payload.fullName} was updated successfully.`,
-      });
-    } else {
-      await api.post("/admin/users", payload);
-      setMessage(`User created. Temporary password: ${payload.password}`);
-      showToast({
-        tone: "success",
-        title: "Member created",
-        description: `${payload.fullName} was added to the organization.`,
-      });
-    }
-    setSubmitting(false);
-    await onCreated();
-    if (!editingUser) {
-      setForm({ fullName: "", email: "", password: "", role: "ADMIN", isActive: true });
+
+    try {
+      if (editingUser) {
+        await api.put(`${endpointPrefix}/users/${editingUser.id}`, {
+          fullName: payload.fullName,
+          password: payload.password || undefined,
+          role: payload.role,
+          isActive: payload.isActive,
+        });
+        setMessage("User updated successfully.");
+        showToast({
+          tone: "success",
+          title: "Member updated",
+          description: `${payload.fullName} was updated successfully.`,
+        });
+      } else {
+        await api.post(`${endpointPrefix}/users`, payload);
+        setMessage(`User created. Temporary password: ${payload.password}`);
+        showToast({
+          tone: "success",
+          title: "Member created",
+          description:
+            endpointPrefix === "/owner"
+              ? `${payload.fullName} was added from the owner dashboard.`
+              : `${payload.fullName} was added to the organization.`,
+        });
+      }
+      await onCreated();
+      if (!editingUser) {
+        setForm({ fullName: "", email: "", password: "", role: "ADMIN", isActive: true });
+      }
+    } catch (error) {
+      setMessage(
+        isAxiosError(error)
+          ? error.response?.data?.message || "Unable to save this user right now."
+          : "Unable to save this user right now."
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -104,7 +123,7 @@ export function CreateUserModal({
       <div className="max-h-[88vh] w-full animate-slide-up overflow-y-auto rounded-t-[28px] bg-white p-4 shadow-shell sm:max-h-[90vh] sm:max-w-md sm:rounded-[28px] sm:p-5">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Super Admin</p>
+            <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{modalLabel}</p>
             <h2 className="mt-2 text-xl font-semibold text-slate-900">
               {editingUser ? "Edit managed user" : "Create managed user"}
             </h2>
@@ -135,7 +154,7 @@ export function CreateUserModal({
           <input type="email" required disabled={Boolean(editingUser)} value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400" placeholder="Email" />
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
             <input type="text" required={!editingUser} minLength={8} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder={editingUser ? "Leave blank to keep current password" : "Temporary password"} />
-            <button type="button" onClick={generatePassword} className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-semibold text-slate-700">
+            <button type="button" onClick={generatePassword} disabled={!canAutoGeneratePassword} className="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
               Generate
             </button>
           </div>
@@ -144,6 +163,11 @@ export function CreateUserModal({
             <option value="ADMIN">ADMIN</option>
             <option value="SUPER_ADMIN">SUPER_ADMIN</option>
           </select>
+          <p className="text-xs text-slate-500">
+            {form.role === "USER"
+              ? "User accounts can use either a manual password or an auto-generated one."
+              : "Admin and super admin accounts require a password entered manually by the super admin."}
+          </p>
           <label className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
             Active user
             <input

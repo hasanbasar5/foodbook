@@ -1,12 +1,14 @@
 const express = require("express");
 const { body, query } = require("express-validator");
 const authenticate = require("../middleware/authenticate");
+const authorize = require("../middleware/authorize");
 const validateRequest = require("../middleware/validateRequest");
 const {
   createCashbookEntry,
   getCashbookEntries,
   updateCashbookEntry,
   deleteCashbookEntry,
+  restoreCashbookEntry,
 } = require("../controllers/cashbookController");
 
 const router = express.Router();
@@ -51,5 +53,6 @@ router.get(
 );
 router.put("/entry/:id", entryValidation, validateRequest, updateCashbookEntry);
 router.delete("/entry/:id", deleteCashbookEntry);
+router.patch("/entry/:id/restore", authorize(["SUPER_ADMIN"]), restoreCashbookEntry);
 
 module.exports = router;

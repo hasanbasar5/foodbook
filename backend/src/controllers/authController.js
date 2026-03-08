@@ -18,7 +18,9 @@ const {
 const { signAccessToken, signRefreshToken } = require("../utils/jwt");
 const { hashToken } = require("../utils/hash");
 const { createAuditLog } = require("../models/auditLogModel");
+const { createLoginEvent } = require("../models/loginEventModel");
 const { hasOrganizationScope } = require("../utils/org");
+const { isOwnerUser } = require("../utils/owner");
 
 const cookieOptions = {
   httpOnly: true,
@@ -61,6 +63,7 @@ const issueTokens = async (user, res) => {
       role: user.role,
       organizationId: user.organizationId,
       organizationName: user.organizationName,
+      isOwner: isOwnerUser(user),
     },
   };
 };
@@ -94,6 +97,15 @@ const register = asyncHandler(async (req, res) => {
   });
 
   const tokens = await issueTokens(user, res);
+  await createLoginEvent({
+    userId: user.id,
+    organizationId: user.organizationId,
+    email: user.email,
+    eventType: "REGISTER",
+    status: "SUCCESS",
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent"),
+  });
   if (hasOrganizationScope(user)) {
     await createAuditLog({
       organizationId: user.organizationId,
@@ -123,6 +135,7 @@ const getCurrentUser = asyncHandler(async (req, res) => {
     organizationId: user.organizationId,
     organizationName: user.organizationName,
     createdAt: user.createdAt,
+    isOwner: isOwnerUser(user),
   });
 });
 
@@ -142,6 +155,7 @@ const updateCurrentUserProfile = asyncHandler(async (req, res) => {
     organizationId: user.organizationId,
     organizationName: user.organizationName,
     createdAt: user.createdAt,
+    isOwner: isOwnerUser(user),
   });
 });
 
@@ -187,6 +201,14 @@ const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const user = await findByEmail(email);
   if (!user) {
+    await createLoginEvent({
+      email,
+      eventType: "LOGIN",
+      status: "FAILED",
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+      failureReason: "USER_NOT_FOUND",
+    });
     const error = new Error("Invalid email or password");
     error.statusCode = 401;
     throw error;
@@ -194,18 +216,47 @@ const login = asyncHandler(async (req, res) => {
 
   const isValidPassword = await bcrypt.compare(password, user.password);
   if (!isValidPassword) {
+    await createLoginEvent({
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      eventType: "LOGIN",
+      status: "FAILED",
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+      failureReason: "INVALID_PASSWORD",
+    });
     const error = new Error("Invalid email or password");
     error.statusCode = 401;
     throw error;
   }
 
   if (!user.isActive) {
+    await createLoginEvent({
+      userId: user.id,
+      organizationId: user.organizationId,
+      email: user.email,
+      eventType: "LOGIN",
+      status: "FAILED",
+      ipAddress: req.ip,
+      userAgent: req.get("user-agent"),
+      failureReason: "ACCOUNT_INACTIVE",
+    });
     const error = new Error("This account is inactive. Contact an administrator.");
     error.statusCode = 403;
     throw error;
   }
 
   const tokens = await issueTokens(user, res);
+  await createLoginEvent({
+    userId: user.id,
+    organizationId: user.organizationId,
+    email: user.email,
+    eventType: "LOGIN",
+    status: "SUCCESS",
+    ipAddress: req.ip,
+    userAgent: req.get("user-agent"),
+  });
   res.json(tokens);
 });
 

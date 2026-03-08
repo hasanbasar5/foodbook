@@ -2,9 +2,11 @@ const asyncHandler = require("../middleware/asyncHandler");
 const {
   createEntry,
   getEntryById,
+  getEntryByIdWithOptions,
   listEntries,
   updateEntry,
   deleteEntry,
+  restoreEntry,
 } = require("../models/cashbookModel");
 const { createAuditLog } = require("../models/auditLogModel");
 const { hasOrganizationScope } = require("../utils/org");
@@ -134,7 +136,10 @@ const deleteCashbookEntry = asyncHandler(async (req, res) => {
     throw error;
   }
 
-  await deleteEntry(Number(req.params.id));
+  await deleteEntry({
+    id: Number(req.params.id),
+    deletedByUserId: req.user.id,
+  });
   await createAuditLog({
     organizationId: req.user.organizationId,
     actorUserId: req.user.id,
@@ -150,9 +155,46 @@ const deleteCashbookEntry = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
+const restoreCashbookEntry = asyncHandler(async (req, res) => {
+  if (req.user.role !== "SUPER_ADMIN") {
+    const error = new Error("Only super admins can restore deleted entries");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const entry = await getEntryByIdWithOptions({
+    id: Number(req.params.id),
+    organizationId: req.user.organizationId,
+    includeDeleted: true,
+  });
+
+  if (!entry || !entry.deleted_at) {
+    const error = new Error("Deleted entry not found");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const restoredEntry = await restoreEntry(Number(req.params.id));
+  await createAuditLog({
+    organizationId: req.user.organizationId,
+    actorUserId: req.user.id,
+    actorRole: req.user.role,
+    action: "RESTORE_ENTRY",
+    targetType: "CASHBOOK_ENTRY",
+    targetId: restoredEntry.id,
+    details: {
+      entryName: restoredEntry.entry_name,
+      ownerUserId: restoredEntry.user_id,
+    },
+  });
+
+  res.json(restoredEntry);
+});
+
 module.exports = {
   createCashbookEntry,
   getCashbookEntries,
   updateCashbookEntry,
   deleteCashbookEntry,
+  restoreCashbookEntry,
 };

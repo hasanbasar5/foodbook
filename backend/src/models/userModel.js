@@ -96,6 +96,7 @@ const listUsers = async ({ organizationId, page, limit, search, status }) => {
      LEFT JOIN cashbook_entries
        ON cashbook_entries.user_id = users.id
       AND cashbook_entries.organization_id = users.organization_id
+      AND cashbook_entries.deleted_at IS NULL
      ${where}
      GROUP BY users.id, users.email, users.full_name, users.avatar_url, users.is_active, roles.name, users.created_at
      ORDER BY users.created_at DESC
@@ -118,12 +119,69 @@ const listUsers = async ({ organizationId, page, limit, search, status }) => {
   };
 };
 
+const listAllUsers = async ({ page, limit, search, status }) => {
+  const offset = (page - 1) * limit;
+  const clauses = [];
+  const values = [];
+
+  if (search) {
+    clauses.push("(users.email LIKE ? OR users.full_name LIKE ? OR organizations.name LIKE ?)");
+    values.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+
+  if (status === "active") {
+    clauses.push("users.is_active = 1");
+  } else if (status === "inactive") {
+    clauses.push("users.is_active = 0");
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const [rows] = await pool.query(
+    `SELECT users.id, users.email, roles.name AS role, users.created_at,
+        users.full_name, users.avatar_url, users.is_active,
+        organizations.name AS organization_name,
+        COUNT(cashbook_entries.id) AS entry_count,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Credit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_credit,
+        COALESCE(SUM(CASE WHEN cashbook_entries.entry_type = 'Debit' THEN cashbook_entries.amount ELSE 0 END), 0) AS total_debit
+     FROM users
+     INNER JOIN roles ON roles.id = users.role_id
+     LEFT JOIN organizations ON organizations.id = users.organization_id
+     LEFT JOIN cashbook_entries
+       ON cashbook_entries.user_id = users.id
+      AND (cashbook_entries.organization_id <=> users.organization_id)
+      AND cashbook_entries.deleted_at IS NULL
+     ${where}
+     GROUP BY users.id, users.email, users.full_name, users.avatar_url, users.is_active, roles.name, users.created_at, organizations.name
+     ORDER BY users.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [...values, limit, offset]
+  );
+  const [countRows] = await pool.query(`SELECT COUNT(*) AS total FROM users
+    LEFT JOIN organizations ON organizations.id = users.organization_id
+    ${where}`, values);
+
+  return {
+    items: rows,
+    pagination: {
+      page,
+      limit,
+      total: countRows[0].total,
+      totalPages: Math.max(1, Math.ceil(countRows[0].total / limit)),
+    },
+  };
+};
+
 const updateUserRole = async ({ organizationId, userId, roleId }) => {
   await pool.query("UPDATE users SET role_id = ? WHERE id = ? AND organization_id = ?", [
     roleId,
     userId,
     organizationId,
   ]);
+  return findById(userId);
+};
+
+const updateUserRoleGlobal = async ({ userId, roleId }) => {
+  await pool.query("UPDATE users SET role_id = ? WHERE id = ?", [roleId, userId]);
   return findById(userId);
 };
 
@@ -166,8 +224,37 @@ const updateManagedUser = ({
   }
 };
 
+const updateManagedUserGlobal = ({
+  userId,
+  fullName,
+  avatarUrl,
+  roleId,
+  password,
+  isActive,
+}) => {
+  if (password) {
+    return pool
+      .query(
+        "UPDATE users SET full_name = ?, avatar_url = ?, role_id = ?, password = ?, is_active = ? WHERE id = ?",
+        [fullName, avatarUrl || null, roleId, password, isActive === false ? 0 : 1, userId]
+      )
+      .then(() => findById(userId));
+  }
+
+  return pool
+    .query(
+      "UPDATE users SET full_name = ?, avatar_url = ?, role_id = ?, is_active = ? WHERE id = ?",
+      [fullName, avatarUrl || null, roleId, isActive === false ? 0 : 1, userId]
+    )
+    .then(() => findById(userId));
+};
+
 const deleteUser = async ({ organizationId, userId }) => {
   await pool.query("DELETE FROM users WHERE id = ? AND organization_id = ?", [userId, organizationId]);
+};
+
+const deleteUserGlobal = async ({ userId }) => {
+  await pool.query("DELETE FROM users WHERE id = ?", [userId]);
 };
 
 const setUserStatus = async ({ organizationId, userId, isActive }) => {
@@ -176,6 +263,11 @@ const setUserStatus = async ({ organizationId, userId, isActive }) => {
     userId,
     organizationId,
   ]);
+  return findById(userId);
+};
+
+const setUserStatusGlobal = async ({ userId, isActive }) => {
+  await pool.query("UPDATE users SET is_active = ? WHERE id = ?", [isActive ? 1 : 0, userId]);
   return findById(userId);
 };
 
@@ -188,16 +280,27 @@ const resetUserPassword = async ({ organizationId, userId, passwordHash }) => {
   return findById(userId);
 };
 
+const resetUserPasswordGlobal = async ({ userId, passwordHash }) => {
+  await pool.query("UPDATE users SET password = ? WHERE id = ?", [passwordHash, userId]);
+  return findById(userId);
+};
+
 module.exports = {
   findByEmail,
   findById,
   createUser,
   listUsers,
+  listAllUsers,
   updateUserRole,
+  updateUserRoleGlobal,
   updateProfile,
   updateCurrentUserPassword,
   updateManagedUser,
+  updateManagedUserGlobal,
   deleteUser,
+  deleteUserGlobal,
   setUserStatus,
+  setUserStatusGlobal,
   resetUserPassword,
+  resetUserPasswordGlobal,
 };

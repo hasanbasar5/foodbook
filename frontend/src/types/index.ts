@@ -8,6 +8,7 @@ export interface AuthUser {
   role: Role;
   organizationId: number | null;
   organizationName: string | null;
+  isOwner?: boolean;
 }
 
 export interface AuthResponse {
@@ -28,6 +29,7 @@ export interface Entry {
   entry_type: "Debit" | "Credit";
   payment_method: "Cash" | "Online" | "Card" | "UPI";
   created_at: string;
+  deleted_at?: string | null;
 }
 
 export interface EntrySummary {
@@ -54,6 +56,7 @@ export interface UserRow {
   email: string;
   full_name: string;
   avatar_url?: string | null;
+  organization_name?: string | null;
   is_active: number | boolean;
   role: Role;
   created_at: string;
@@ -97,4 +100,40 @@ export interface AuditLogItem {
   actor_email: string;
   details?: Record<string, unknown> | null;
   created_at: string;
+}
+
+export interface OwnerLoginEvent {
+  id: number;
+  user_id?: number | null;
+  organization_id?: number | null;
+  email: string;
+  event_type: "LOGIN" | "REGISTER";
+  full_name?: string | null;
+  organization_name?: string | null;
+  status: "SUCCESS" | "FAILED";
+  ip_address?: string | null;
+  user_agent?: string | null;
+  failure_reason?: string | null;
+  created_at: string;
+}
+
+export interface OwnerDashboardResponse {
+  summary: {
+    totalEvents: number;
+    totalRegistrations: number;
+    successfulLogins: number;
+    failedLogins: number;
+    activeUsers1d: number;
+    activeUsers7d: number;
+    activeUsers30d: number;
+  };
+  items: OwnerLoginEvent[];
+  lastLogins: Array<{
+    email: string;
+    user_id?: number | null;
+    organization_id?: number | null;
+    full_name?: string | null;
+    organization_name?: string | null;
+    created_at: string;
+  }>;
 }
