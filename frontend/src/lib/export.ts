@@ -19,6 +19,23 @@ const formatPdfCurrency = (value: number) =>
     maximumFractionDigits: 2,
   })}`;
 
+const escapeForRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getPdfRemark = (entry: Entry) => {
+  const baseRemark = (entry.description || entry.entry_name || "No remark").trim();
+  const fallbackRemark = (entry.entry_name || "No remark").trim();
+  const configuredNoiseTokens = ["Abdul Ajees"];
+  const trailingTokens = [entry.full_name, entry.email?.split("@")[0], entry.email]
+    .concat(configuredNoiseTokens)
+    .filter((value): value is string => Boolean(value?.trim()))
+    .map((value) => value.trim());
+
+  return trailingTokens.reduce((remark, token) => {
+    const trailingPattern = new RegExp(`(?:\\s*[-|,:()]?\\s*)${escapeForRegex(token)}\\s*$`, "i");
+    return remark.replace(trailingPattern, "").trim() || fallbackRemark;
+  }, baseRemark);
+};
+
 export const exportEntriesToExcel = (entries: Entry[]) => {
   const rows = entries.map((entry) => ({
     Date: entry.date,
@@ -163,7 +180,7 @@ export const exportEntriesToPdf = (entries: Entry[]) => {
           month: "short",
           year: "numeric",
         }),
-        entry.description || entry.entry_name || "No remark",
+        getPdfRemark(entry),
         getEntryTypeLabel(entry.entry_type),
         entry.payment_method,
         `${entry.entry_type === "Credit" ? "+" : "-"} ${formatPdfCurrency(Number(entry.amount))}`,
