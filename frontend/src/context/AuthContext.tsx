@@ -30,6 +30,22 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STORAGE_KEY = "foodbook.auth";
 
+const getAccessTokenExpiry = (token: string) => {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) {
+      return null;
+    }
+
+    const parsed = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as {
+      exp?: number;
+    };
+    return parsed.exp ? parsed.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
@@ -120,6 +136,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccessToken(parsed.accessToken);
       accessTokenRef.current = parsed.accessToken;
       api.defaults.headers.common.Authorization = `Bearer ${parsed.accessToken}`;
+      const tokenExpiry = getAccessTokenExpiry(parsed.accessToken);
+      const hasUsableAccessToken = Boolean(tokenExpiry && tokenExpiry > Date.now() + 30_000);
+
+      if (hasUsableAccessToken) {
+        setLoading(false);
+        return;
+      }
+
       refreshSession().finally(() => setLoading(false));
     } catch {
       localStorage.removeItem(STORAGE_KEY);

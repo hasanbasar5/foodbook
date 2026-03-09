@@ -26,7 +26,7 @@ const cookieOptions = {
   httpOnly: true,
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
   secure: process.env.NODE_ENV === "production",
-  path: "/api/auth",
+  path: "/",
 };
 
 const getRefreshExpiry = () => {
@@ -289,6 +289,21 @@ const refresh = asyncHandler(async (req, res) => {
 
   await deleteRefreshToken(hashToken(refreshToken));
   const user = await findById(payload.id);
+  if (!user) {
+    res.clearCookie("refreshToken", cookieOptions);
+    const error = new Error("User not found");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  if (!user.isActive) {
+    await deleteUserRefreshTokens(user.id);
+    res.clearCookie("refreshToken", cookieOptions);
+    const error = new Error("This account is inactive. Contact an administrator.");
+    error.statusCode = 403;
+    throw error;
+  }
+
   const tokens = await issueTokens(user, res);
   res.json(tokens);
 });
