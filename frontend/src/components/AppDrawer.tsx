@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ChartNoAxesColumn, FileText, ScrollText, ShieldCheck, UserCircle2, X } from "lucide-react";
+import { Calculator, ChartNoAxesColumn, FileText, ScrollText, ShieldCheck, UserCircle2, X } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth } from "@/context/AuthContext";
 
@@ -70,6 +70,14 @@ export function AppDrawer({
             <FileText className="h-5 w-5 text-brand-700" />
             Terms & Version 1.0
           </button>
+          <Link
+            href="/calculator"
+            onClick={onClose}
+            className="flex w-full items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-left text-sm font-medium text-slate-700"
+          >
+            <Calculator className="h-5 w-5 text-brand-700" />
+            Calculator
+          </Link>
           {hasRole(["SUPER_ADMIN"]) ? (
             <button type="button" onClick={onOpenAdminCreate} className="flex w-full items-center gap-3 rounded-2xl bg-slate-50 px-4 py-4 text-left text-sm font-medium text-slate-700">
               <ShieldCheck className="h-5 w-5 text-brand-700" />

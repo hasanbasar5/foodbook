@@ -60,12 +60,6 @@ const getCashbookEntries = asyncHandler(async (req, res) => {
 });
 
 const updateCashbookEntry = asyncHandler(async (req, res) => {
-  if (req.user.role === "USER") {
-    const error = new Error("Users can add entries, but cannot edit them");
-    error.statusCode = 403;
-    throw error;
-  }
-
   const entry = await getEntryById(Number(req.params.id), req.user.organizationId);
   if (!entry) {
     const error = new Error("Entry not found");
@@ -112,12 +106,6 @@ const updateCashbookEntry = asyncHandler(async (req, res) => {
 });
 
 const deleteCashbookEntry = asyncHandler(async (req, res) => {
-  if (req.user.role === "USER") {
-    const error = new Error("Users can add entries, but cannot delete them");
-    error.statusCode = 403;
-    throw error;
-  }
-
   const entry = await getEntryById(Number(req.params.id), req.user.organizationId);
   if (!entry) {
     const error = new Error("Entry not found");

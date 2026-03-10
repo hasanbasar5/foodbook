@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
-import { AlertCircle, LoaderCircle } from "lucide-react";
+import { AlertCircle, Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export function AuthForm({
@@ -20,6 +20,9 @@ export function AuthForm({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,6 +45,12 @@ export function AuthForm({
           await login(email, password);
         }
       } else {
+        if (password !== confirmPassword) {
+          setError("Password and confirm password must match.");
+          setSubmitting(false);
+          return;
+        }
+
         await register({
           email,
           password,
@@ -134,16 +143,50 @@ export function AuthForm({
       </label>
       <label className="block space-y-2">
         <span className="text-sm font-medium text-slate-700">Password</span>
-        <input
-          type="password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-brand-400 focus:bg-white"
-          placeholder="Minimum 8 characters"
-        />
+        <div className="relative">
+          <input
+            type={passwordVisible ? "text" : "password"}
+            required
+            minLength={8}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm outline-none transition focus:border-brand-400 focus:bg-white"
+            placeholder="Minimum 8 characters"
+          />
+          <button
+            type="button"
+            onClick={() => setPasswordVisible((current) => !current)}
+            className="absolute inset-y-0 right-3 inline-flex items-center text-slate-400"
+            aria-label={passwordVisible ? "Hide password" : "Show password"}
+          >
+            {passwordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </label>
+      {mode === "register" ? (
+        <label className="block space-y-2">
+          <span className="text-sm font-medium text-slate-700">Confirm password</span>
+          <div className="relative">
+            <input
+              type={confirmPasswordVisible ? "text" : "password"}
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm outline-none transition focus:border-brand-400 focus:bg-white"
+              placeholder="Re-enter password"
+            />
+            <button
+              type="button"
+              onClick={() => setConfirmPasswordVisible((current) => !current)}
+              className="absolute inset-y-0 right-3 inline-flex items-center text-slate-400"
+              aria-label={confirmPasswordVisible ? "Hide confirm password" : "Show confirm password"}
+            >
+              {confirmPasswordVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </label>
+      ) : null}
       {error ? (
         <div className="flex items-start gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm leading-6 text-red-600">
           <AlertCircle className="h-4 w-4" />
