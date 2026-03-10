@@ -14,6 +14,21 @@ const initialForm = {
   paymentMethod: "Cash" as "Cash" | "Online" | "Card" | "UPI",
 };
 
+const categoryOptions = [
+  "Transport",
+  "Salary",
+  "Food Expense",
+  "Fuel",
+  "Rent",
+  "Shopping",
+  "Bills",
+  "Medical",
+  "Education",
+  "Entertainment",
+  "Investment",
+  "Other",
+] as const;
+
 export function EntryModal({
   open,
   entry,
@@ -86,7 +101,26 @@ export function EntryModal({
         </div>
         <form className="space-y-4" onSubmit={handleSubmit}>
           <input type="text" required minLength={2} value={form.entryName} onChange={(event) => setForm((current) => ({ ...current, entryName: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Entry name" />
-          <input type="text" required minLength={2} value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Category" />
+          <div className="space-y-2">
+            <input
+              type="text"
+              list="entry-category-options"
+              required
+              minLength={2}
+              value={form.category}
+              onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+              placeholder="Category"
+            />
+            <datalist id="entry-category-options">
+              {categoryOptions.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+            <p className="text-xs text-slate-500">
+              Pick a common category or type your own custom one.
+            </p>
+          </div>
           <input type="number" min="0.01" step="0.01" required value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Amount" />
           <input type="date" required value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" />
           <textarea required minLength={3} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} className="h-28 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Description" />

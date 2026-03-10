@@ -58,8 +58,9 @@ export function EntryList({
   return (
     <div className={className} data-tour="entries">
       {entries.map((entry, index) => {
-        const canEdit = showActions && (role === "ADMIN" || role === "SUPER_ADMIN");
-        const canDelete = showActions && (role === "ADMIN" || role === "SUPER_ADMIN");
+        const isOwnEntry = Number(entry.user_id) === Number(currentUserId);
+        const canEdit = showActions && (role === "ADMIN" || role === "SUPER_ADMIN" || isOwnEntry);
+        const canDelete = showActions && (role === "ADMIN" || role === "SUPER_ADMIN" || isOwnEntry);
         const entryOwner =
           entry.user_id === currentUserId ? "You" : entry.full_name || "User";
         const typeLabel = entry.entry_type === "Credit" ? "Cash In" : "Cash Out";
